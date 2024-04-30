@@ -216,7 +216,8 @@ def attack_main(url, params, verbose=0):
         mask, column_length = attack_get_column_length(url, params, table, fuzz)
         if column_length != -1:
             print_greenb("[+] Column name length : " + str(column_length))
-            print_greenb("[+] Retrieve column name for table "+table+" : Length " + str(column_length) + ", Step retrieve :" + mask)
+            if verbose > 0:
+                print_greenb("[+] Retrieve column name for table "+table+" : Length " + str(column_length) + ", Step retrieve :" + mask)
         else:
             return -1
         column=attack_get_column(url, params, column_length, table, mask)
@@ -241,6 +242,10 @@ if args.verbose == 1:
     print_blueb("[+] Verbose mode enabled.")
 elif args.verbose > 1:
     print_blueb("[+] Debug mode enabled.")
+elif args.verbose > 2:
+    print_blueb("[+] Extreme debug mode enabled.")
+elif args.verbose > 3:
+    print_blueb("[+] WTF Are u serious ? debug mode enabled.")
 
 # Si mode interactif est activé
 if args.interactive:
