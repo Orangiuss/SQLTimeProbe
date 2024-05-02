@@ -276,8 +276,8 @@ elif args.url and args.params:
     if args.verify:
         verify(url, params,args.verbose)
     if args.attack:
-        verify(url, params,args.verbose)
-        attack_main(url, params, args.verbose)
+        if verify(url, params,args.verbose):
+            attack_main(url, params, args.verbose)
 else:
     print("Veuillez utiliser -i pour le mode interactif ou -u pour l'URL et -p pour les paramètres.")
     exit()
