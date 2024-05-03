@@ -39,3 +39,11 @@ python sqltimeprobe.py -u http://example.com -p "test=<@urlencode>OK' AND (SELEC
 
 ### Image example :
 ![alt text](images/SQLTimeProbe.png)
+
+## Disclaimer
+
+This tool is intended for educational purposes only. Misuse of this tool on websites without prior authorization is illegal and could lead to legal consequences.
+
+## Contributing
+
+Contributions are welcome! Feel free to open an issue or submit a pull request.
