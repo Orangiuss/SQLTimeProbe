@@ -1,20 +1,20 @@
-# SQLTimeProbe - A little script to exploit Time-Based SQL Injection
+# SQLTimeProbe :shipit: - Exploit Time-Based SQL Injection
 
 SQLTimeProbe is a simple Python script designed to exploit Time-Based SQL Injection vulnerabilities.
 
 ![alt text](images/sqltimeprobe.png)
 
-## Description
+## Description 📝
 
 Time-Based SQL Injection is a type of SQL Injection attack that relies on the database management system's (DBMS) time delays to infer information about the database. This script automates the process of exploiting Time-Based SQL Injection vulnerabilities, making it easier to test and secure web applications.
 
-## Features
+## Features ⚙️
 
 - Automated Time-Based SQL Injection exploitation
 - Easy to use with a simple command-line interface
-- Retrieve database name and table with column like [...]
+- Retrieve database name and tables with column and column name like [%password%] (and others if you want..)
 
-## Usage
+## Usage 🚀
 
 1. Clone the repository:
 
@@ -40,10 +40,10 @@ python sqltimeprobe.py -u http://example.com -p "test=<@urlencode>OK' AND (SELEC
 ### Image example :
 ![alt text](images/SQLTimeProbe.png)
 
-## Disclaimer
+## Disclaimer ⚠️
 
 This tool is intended for educational purposes only. Misuse of this tool on websites without prior authorization is illegal and could lead to legal consequences.
 
-## Contributing
+## Contributing 🤝
 
 Contributions are welcome! Feel free to open an issue or submit a pull request.
