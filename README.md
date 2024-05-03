@@ -1,4 +1,4 @@
-# SQLTimeProbe :shipit: - Exploit Time-Based SQL Injection
+# SQLTimeProbe 🕵️‍♂️ - Exploit Time-Based SQL Injection
 
 SQLTimeProbe is a simple Python script designed to exploit Time-Based SQL Injection vulnerabilities.
 
