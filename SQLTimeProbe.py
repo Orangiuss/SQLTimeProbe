@@ -1,4 +1,4 @@
-import requests
+import requests # type: ignore
 import time
 import argparse
 import urllib.parse
